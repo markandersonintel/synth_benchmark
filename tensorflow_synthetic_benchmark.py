@@ -1,13 +1,13 @@
 from __future__ import absolute_import, division, print_function
-
 import argparse
 import os
 import numpy as np
 import timeit
-
-import tensorflow as tf
 import horovod.tensorflow as hvd
-from tensorflow.keras import applications
+import tensorflow as tf
+from tensorflow.contrib.keras import applications
+from keras_weights_to_frozen_model import load_and_freeze
+
 
 # Benchmark settings
 parser = argparse.ArgumentParser(description='TensorFlow Synthetic Benchmark',
@@ -17,14 +17,14 @@ parser.add_argument('--fp16-allreduce', action='store_true', default=False,
 
 parser.add_argument('--model', type=str, default='ResNet50',
                     help='model to benchmark')
-parser.add_argument('--batch-size', type=int, default=32,
+parser.add_argument('--batch-size', type=int, default=1,
                     help='input batch size')
 
-parser.add_argument('--num-warmup-batches', type=int, default=10,
+parser.add_argument('--num-warmup-batches', type=int, default=1,
                     help='number of warm-up batches that don\'t count towards benchmark')
-parser.add_argument('--num-batches-per-iter', type=int, default=10,
+parser.add_argument('--num-batches-per-iter', type=int, default=11,
                     help='number of batches per benchmark iteration')
-parser.add_argument('--num-iters', type=int, default=10,
+parser.add_argument('--num-iters', type=int, default=1,
                     help='number of benchmark iterations')
 
 parser.add_argument('--eager', action='store_true', default=False,
@@ -33,6 +33,10 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--use-adasum', action='store_true', default=False,
                     help='use adasum algorithm to do reduction')
+parser.add_argument('--model_output_dir', type=str, default="model",
+                    help="path to store savedmodel files")
+parser.add_argument('--frozen_model_name', type=str, default="frozen_model.pb",
+                    help="filename of frozen model")
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda
@@ -114,6 +118,8 @@ def run(benchmark_step):
     log('Total img/sec on %d %s(s): %.1f +-%.1f' %
         (hvd.size(), device, hvd.size() * img_sec_mean, hvd.size() * img_sec_conf))
 
+    # Save weights for model export.
+    model.save_weights('weights.h5')
 
 if tf.executing_eagerly():
     with tf.device(device):
@@ -126,3 +132,9 @@ else:
         loss = loss_function()
         train_opt = opt.minimize(loss)
         run(lambda: session.run(train_opt))
+
+# Save model.
+log("Saving Model...")
+load_and_freeze(args.model, 'weights.h5', args.model_output_dir, args.frozen_model_name)
+os.remove('weights.h5')
+log("Model Saved.")
