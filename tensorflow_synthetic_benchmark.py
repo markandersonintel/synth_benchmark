@@ -22,7 +22,7 @@ parser.add_argument('--batch-size', type=int, default=1,
 
 parser.add_argument('--num-warmup-batches', type=int, default=1,
                     help='number of warm-up batches that don\'t count towards benchmark')
-parser.add_argument('--num-batches-per-iter', type=int, default=11,
+parser.add_argument('--num-batches-per-iter', type=int, default=1,
                     help='number of batches per benchmark iteration')
 parser.add_argument('--num-iters', type=int, default=1,
                     help='number of benchmark iterations')
@@ -33,13 +33,16 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--use-adasum', action='store_true', default=False,
                     help='use adasum algorithm to do reduction')
-parser.add_argument('--model_output_dir', type=str, default="model",
-                    help="path to store savedmodel files")
 parser.add_argument('--frozen_model_name', type=str, default="frozen_model.pb",
                     help="filename of frozen model")
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda
+
+# Gradient Path setup
+model_dir = os.path.abspath(os.environ.get('PS_MODEL_PATH', os.getcwd() + '/models') + '/hvd-tf-synth-benchmark')
+export_dir = os.path.abspath(os.environ.get('PS_MODEL_PATH', os.getcwd() + '/models'))
+
 
 hvd.init()
 
@@ -119,7 +122,7 @@ def run(benchmark_step):
         (hvd.size(), device, hvd.size() * img_sec_mean, hvd.size() * img_sec_conf))
 
     # Save weights for model export.
-    model.save_weights('weights.h5')
+    model.save_weights(os.path.join(export_dir,'weights.h5'))
 
 if tf.executing_eagerly():
     with tf.device(device):
@@ -135,6 +138,6 @@ else:
 
 # Save model.
 log("Saving Model...")
-load_and_freeze(args.model, 'weights.h5', args.model_output_dir, args.frozen_model_name)
+load_and_freeze(args.model, 'weights.h5', model_dir, args.frozen_model_name)
 os.remove('weights.h5')
 log("Model Saved.")
