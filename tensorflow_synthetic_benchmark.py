@@ -138,6 +138,6 @@ else:
 
 # Save model.
 log("Saving Model...")
-load_and_freeze(args.model, 'weights.h5', model_dir, args.frozen_model_name)
+load_and_freeze(args.model, os.path.join(export_dir,'weights.h5'), model_dir, args.frozen_model_name)
 os.remove('weights.h5')
 log("Model Saved.")
