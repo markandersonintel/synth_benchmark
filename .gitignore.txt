@@ -1,0 +1,4 @@
+#ignore created model dir
+/model/
+#ignore .idea folder
+/.idea/
